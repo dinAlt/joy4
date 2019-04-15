@@ -1,8 +1,8 @@
 package codec
 
 import (
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/codec/fake"
+	"github.com/dinalt/joy4/av"
+	"github.com/dinalt/joy4/codec/fake"
 	"time"
 )
 

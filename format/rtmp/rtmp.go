@@ -8,12 +8,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/dinalt/joy4/utils/bits/pio"
 	"github.com/dinalt/joy4/av"
 	"github.com/dinalt/joy4/av/avutil"
 	"github.com/dinalt/joy4/format/flv"
 	"github.com/dinalt/joy4/format/flv/flvio"
+	"github.com/dinalt/joy4/utils/bits/pio"
 	"io"
+	"log"
 	"net"
 	"net/url"
 	"strings"
@@ -58,6 +59,7 @@ type Server struct {
 	HandlePublish func(*Conn)
 	HandlePlay    func(*Conn)
 	HandleConn    func(*Conn)
+	stop          chan struct{}
 }
 
 func (self *Server) handleConn(conn *Conn) (err error) {
@@ -102,25 +104,45 @@ func (self *Server) ListenAndServe() (err error) {
 		fmt.Println("rtmp: server: listening on", addr)
 	}
 
-	for {
-		var netconn net.Conn
-		if netconn, err = listener.Accept(); err != nil {
-			return
-		}
+	self.stop = make(chan struct{})
 
-		if Debug {
-			fmt.Println("rtmp: server: accepted")
-		}
-
-		conn := NewConn(netconn)
-		conn.isserver = true
-		go func() {
-			err := self.handleConn(conn)
-			if Debug {
-				fmt.Println("rtmp: server: client closed err:", err)
+	go func() {
+		for {
+			var netconn net.Conn
+			if netconn, err = listener.Accept(); err != nil {
+				return
 			}
-		}()
+
+			if Debug {
+				fmt.Println("rtmp: server: accepted")
+			}
+
+			conn := NewConn(netconn)
+			conn.isserver = true
+			go func() {
+				err := self.handleConn(conn)
+				if Debug {
+					fmt.Println("rtmp: server: client closed err:", err)
+				}
+			}()
+		}
+	}()
+
+	<-self.stop
+	err = listener.Close()
+
+	return
+
+}
+
+func (self *Server) Close() {
+
+	if self.stop == nil {
+		return
 	}
+
+	self.stop <- struct{}{}
+
 }
 
 const (
@@ -398,6 +420,7 @@ func (self *Conn) readConnect() (err error) {
 	if ok {
 		tcurl, _ = _tcurl.(string)
 	}
+	log.Println(tcurl)
 	connectparams := self.commandobj
 
 	if err = self.writeBasicConf(); err != nil {
